@@ -103,6 +103,9 @@ export function strategyDtoToPersonality(s: AgentStrategyDto): AgentPersonality 
 /** `GET /agents/:id/trade-summary?season_id=…` */
 export type TradeSummaryFruit = { type: string; quality: number };
 
+/** Post-swap honesty / misdelivery signal on each trade-summary round. */
+export type TradeSummaryFraudOutcome = "honest" | "i_was_scammed" | "i_scammed" | "both_scammed";
+
 /**
  * One row from `GET /agents/:id/trade-summary`.
  * The server may attach additional primitive or JSON-shaped keys; the list UI surfaces unknown keys.
@@ -116,6 +119,8 @@ export type TradeSummaryRound = {
   got_target: boolean;
   received: TradeSummaryFruit | null;
   partner: { id: string; name: string } | null;
+  /** Omitted on older APIs; set when the backend reports swap outcome. */
+  fraud?: TradeSummaryFraudOutcome | string | null;
 };
 
 export type AgentTradeSummaryResponse = {

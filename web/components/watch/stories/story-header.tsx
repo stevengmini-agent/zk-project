@@ -1,3 +1,4 @@
+import { GlobalLeaderboard } from "./global-leaderboard";
 import { RoundLeaderboard } from "./round-leaderboard";
 
 export function StoryHeader({ round }: { round: number }) {
@@ -9,6 +10,9 @@ export function StoryHeader({ round }: { round: number }) {
           Micro-stories from the unsecured market—betrayals, pro moves, collapses, and broken alliances. Mock feed;
           read, react, then tune your agent on the Agent page.
         </p>
+      </div>
+      <div className="rounded-xl border border-white/[0.08] bg-zinc-900/40 p-4">
+        <GlobalLeaderboard />
       </div>
       <header className="rounded-xl border border-white/[0.08] bg-zinc-900/40 p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

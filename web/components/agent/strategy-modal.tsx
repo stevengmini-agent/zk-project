@@ -143,18 +143,18 @@ export function StrategyModal({
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}
-            aria-describedby={descId}
+            aria-describedby={server ? undefined : descId}
             className={`relative z-[101] flex max-h-[90vh] w-full max-w-3xl flex-col ${modalSurface}`}
           >
             <div className="shrink-0 border-b border-zinc-800 p-4 sm:p-5">
               <h2 id={titleId} className="text-lg font-semibold text-white">
                 Strategy &amp; chat with {agentDisplayName}
               </h2>
-              <p id={descId} className="mt-1 text-sm text-zinc-500">
-                {server
-                  ? "Chat with the strategy advisor. Save runs generate on the server, then writes freeText via PUT /strategy."
-                  : "Offline demo: rule-based chat in this browser only (not connected to the strategy API)."}
-              </p>
+              {!server ? (
+                <p id={descId} className="mt-1 text-sm text-zinc-500">
+                  Offline demo: rule-based chat in this browser only (not connected to the strategy API).
+                </p>
+              ) : null}
             </div>
 
             <div className="min-h-0 shrink-0 p-4 sm:p-5">

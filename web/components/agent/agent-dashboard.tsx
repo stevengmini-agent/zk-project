@@ -42,11 +42,6 @@ export function AgentDashboard({
     setSetupGateOpen(!isAgentSetupComplete(profile.id));
   }, [hydrated, isOwnedSession, profile.id]);
 
-  function handleSetupCompleted() {
-    refreshName();
-    setSetupGateOpen(false);
-  }
-
   const profileActions = (
     <>
       <StrategyModal agentId={profile.id} agentDisplayName={displayName} compact />
@@ -63,7 +58,7 @@ export function AgentDashboard({
   return (
     <>
       {isOwnedSession ? (
-        <AgentFirstVisitModal open={setupGateOpen} agentId={profile.id} onCompleted={handleSetupCompleted} />
+        <AgentFirstVisitModal open={setupGateOpen} agentId={profile.id} />
       ) : null}
 
       <PersonalitySetupModal
@@ -97,7 +92,7 @@ export function AgentDashboard({
 
       <div className="mt-8">
         <ProofMockBlock profile={profile} profileActions={profileActions} />
-        <AgentTradeHistory agentId={profile.id} verifiedScores={profile.serverMeta?.verified_scores} />
+        <AgentTradeHistory agentId={profile.id} />
       </div>
     </>
   );

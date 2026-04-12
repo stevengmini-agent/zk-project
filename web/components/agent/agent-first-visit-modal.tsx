@@ -2,12 +2,11 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DEFAULT_PERSONALITY, hasPersonality, savePersonality } from "@/lib/agent-personality";
+import { hasPersonality } from "@/lib/agent-personality";
 import {
   isSchemasVerified,
   isSessionVerified,
   loadDisplayName,
-  markFirstVisitDone,
   markSchemasVerified,
   markSessionVerified,
   saveDisplayName,
@@ -31,10 +30,9 @@ type SchemaId = (typeof SCHEMA_ROWS)[number]["id"];
 type Props = {
   open: boolean;
   agentId: string;
-  onCompleted: () => void;
 };
 
-export function AgentFirstVisitModal({ open, agentId, onCompleted }: Props) {
+export function AgentFirstVisitModal({ open, agentId }: Props) {
   const router = useRouter();
   const { showToast } = useAppToast();
   const titleId = useId();
@@ -125,12 +123,6 @@ export function AgentFirstVisitModal({ open, agentId, onCompleted }: Props) {
     setPhase("behavior");
   }
 
-  function finishWithDefaults() {
-    savePersonality(agentId, DEFAULT_PERSONALITY);
-    markFirstVisitDone(agentId);
-    onCompleted();
-  }
-
   function startGuided() {
     const err = validateName();
     if (err) {
@@ -145,7 +137,7 @@ export function AgentFirstVisitModal({ open, agentId, onCompleted }: Props) {
 
   return (
     <div className={`${modalBackdrop} flex items-center justify-center p-4`} role="dialog" aria-modal="true" aria-labelledby={titleId}>
-      <div className={`w-full max-w-lg p-6 sm:p-8 ${modalSurface}`}>
+      <div className={`w-full max-w-md p-6 sm:p-8 ${modalSurface}`}>
         <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-zinc-500">Session setup · required</p>
 
         {phase === "verify" ? (
@@ -254,17 +246,12 @@ export function AgentFirstVisitModal({ open, agentId, onCompleted }: Props) {
               Set how your agent behaves
             </h2>
             <p className="mt-3 text-sm text-zinc-400">
-              Reputation panels and chat use saved 8-axis personality (16-question guided setup or defaults). You can edit
+              Reputation panels and chat use your saved 8-axis personality from the guided 16-question setup. You can edit it
               anytime.
             </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <button type="button" onClick={startGuided} className={`${btnPrimary} min-h-[44px] flex-1`}>
-                Guided setup
-              </button>
-              <button type="button" onClick={finishWithDefaults} className={`${btnSecondary} min-h-[44px] flex-1`}>
-                Use default behavior
-              </button>
-            </div>
+            <button type="button" onClick={startGuided} className={`${btnPrimary} mt-8 w-full min-h-[44px]`}>
+              Guided setup
+            </button>
           </>
         ) : null}
       </div>
