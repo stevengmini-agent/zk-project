@@ -3,7 +3,7 @@ import {
   MOCK_CONTROVERSIAL_AGENTS,
   MOCK_TRENDING_AGENTS,
   MOCK_TRENDING_TAGS,
-} from "@/lib/mock-watch-feed";
+} from "@/lib/watch";
 
 export function TrendingSidebar() {
   return (

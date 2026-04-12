@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
+import { LAYOUT_CONTENT_CLASS } from "@/lib/config/layout";
 
 export function PageShell({ children }: { children: ReactNode }) {
   return (
-    <div className="mx-auto min-h-[60vh] max-w-6xl px-4 py-10 sm:px-6">{children}</div>
+    <div className={`${LAYOUT_CONTENT_CLASS} min-h-[60vh] py-10`}>{children}</div>
   );
 }
 
@@ -28,9 +29,7 @@ export function Card({
       className={`rounded-xl border border-white/[0.08] bg-zinc-900/30 p-5 shadow-sm shadow-black/30 ${className}`}
     >
       {title ? (
-        <h3 className="mb-3 text-sm font-semibold uppercase tracking-[0.18em] text-zinc-200">
-          {title}
-        </h3>
+        <h3 className="mb-3 text-sm font-semibold uppercase tracking-[0.18em] text-zinc-200">{title}</h3>
       ) : null}
       <div className="text-sm leading-relaxed text-zinc-300">{children}</div>
     </div>

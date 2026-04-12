@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { LAYOUT_CONTENT_CLASS } from "@/lib/config/layout";
 
 /** Static-export friendly redirect to home with a hash (legacy routes). */
 export function HashRedirect({ hash }: { hash: string }) {
@@ -10,7 +11,7 @@ export function HashRedirect({ hash }: { hash: string }) {
   }, [hash]);
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-16 text-center text-sm text-zinc-500">
+    <div className={`${LAYOUT_CONTENT_CLASS} py-16 text-center text-sm text-zinc-500`}>
       Redirecting to lab overview…
     </div>
   );

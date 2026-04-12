@@ -1,5 +1,5 @@
 import { apiFetchJson } from "@/lib/api-config";
-import type { StoryType } from "@/lib/mock-watch-feed";
+import type { StoryType } from "@/lib/watch";
 
 export type WatchCommentPartner = {
   id: string;

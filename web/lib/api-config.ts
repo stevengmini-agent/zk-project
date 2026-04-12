@@ -1,49 +1,40 @@
 /**
- * Global backend for the Agent Reputation web app.
+ * HTTP client for the Agent Reputation backend (`apiUrl`, `apiFetch`, `apiFetchJson`).
  * Uses native `fetch` only (no axios).
  *
- * All API paths are under `{origin}/api/v1`.
- *
- * Override in `.env.local`:
- *   NEXT_PUBLIC_API_ORIGIN=https://cg.zkpass.org
- * Optional path prefix (default `/api/v1`):
- *   NEXT_PUBLIC_API_VERSION_PREFIX=/api/v1
- * Or set the full API root (skips origin + version join):
- *   NEXT_PUBLIC_API_BASE_URL=https://cg.zkpass.org/api/v1
+ * Env overrides (defaults in `lib/config/public.ts`):
+ *   NEXT_PUBLIC_API_ORIGIN
+ *   NEXT_PUBLIC_API_VERSION_PREFIX
+ *   NEXT_PUBLIC_API_BASE_URL (full root; skips origin + version join)
  */
+import {
+  API_SEASON_QUERY_EXCLUDE_PATHS,
+  DEFAULT_API_ORIGIN,
+  normalizeApiOrigin,
+  normalizeApiVersionPrefix,
+} from "@/lib/config/public";
 import { getGlobalSeasonId } from "@/lib/season-store";
 
-const DEFAULT_API_ORIGIN = "https://cg.zkpass.org";
-
-function normalizeOrigin(raw: string | undefined): string {
-  if (!raw?.trim()) return DEFAULT_API_ORIGIN;
-  return raw.replace(/\/+$/, "");
-}
-
 export const API_ORIGIN =
-  typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_ORIGIN
-    ? normalizeOrigin(process.env.NEXT_PUBLIC_API_ORIGIN)
+  typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_ORIGIN?.trim()
+    ? normalizeApiOrigin(process.env.NEXT_PUBLIC_API_ORIGIN)
     : DEFAULT_API_ORIGIN;
 
-const DEFAULT_VERSION_PREFIX = "/api/v1";
-
 function versionPrefix(): string {
-  const fromEnv = typeof process !== "undefined" ? process.env.NEXT_PUBLIC_API_VERSION_PREFIX?.trim() : undefined;
-  const raw = fromEnv && fromEnv.length > 0 ? fromEnv : DEFAULT_VERSION_PREFIX;
-  const withSlash = raw.startsWith("/") ? raw : `/${raw}`;
-  return withSlash.replace(/\/+$/, "") || DEFAULT_VERSION_PREFIX;
+  const fromEnv =
+    typeof process !== "undefined" ? process.env.NEXT_PUBLIC_API_VERSION_PREFIX?.trim() : undefined;
+  return normalizeApiVersionPrefix(fromEnv);
 }
 
 /** Full API root, e.g. `https://cg.zkpass.org/api/v1` (no trailing slash). */
 export const API_ROOT = (() => {
   if (typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_BASE_URL?.trim()) {
-    return normalizeOrigin(process.env.NEXT_PUBLIC_API_BASE_URL);
+    return normalizeApiOrigin(process.env.NEXT_PUBLIC_API_BASE_URL);
   }
   return `${API_ORIGIN}${versionPrefix()}`;
 })();
 
-/** Paths that must not receive `season_id` (bootstrap / current season). */
-const SEASON_QUERY_EXCLUDE_PATHS = ["/seasons/current"];
+const SEASON_QUERY_EXCLUDE_PATHS = API_SEASON_QUERY_EXCLUDE_PATHS;
 
 function pathWithoutQuery(path: string): string {
   const i = path.indexOf("?");

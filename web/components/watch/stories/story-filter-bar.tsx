@@ -1,6 +1,6 @@
 "use client";
 
-import type { StoryType } from "@/lib/mock-watch-feed";
+import type { StoryType } from "@/lib/watch";
 
 const CATEGORIES: readonly StoryType[] = [
   "scammed",

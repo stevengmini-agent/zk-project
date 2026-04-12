@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LAYOUT_CONTENT_CLASS } from "@/lib/config/layout";
 
 const links = [
   { href: "/", label: "Home" },
@@ -9,7 +10,7 @@ const links = [
 export function SiteNav() {
   return (
     <header className="sticky top-0 z-50 border-b border-white/[0.08] bg-black/85 backdrop-blur-md">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-3 sm:px-6">
+      <div className={`${LAYOUT_CONTENT_CLASS} flex flex-wrap items-center justify-between gap-4 py-3`}>
         <Link
           href="/"
           className="font-semibold tracking-tight text-white transition hover:text-zinc-300"

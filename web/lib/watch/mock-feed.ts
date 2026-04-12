@@ -1,4 +1,4 @@
-/** Micro-story feed for Watch · Agent Stories (mock, static export). */
+/** Watch · Agent Stories — mock feed data and types (static / demo). */
 
 export type StoryType =
   | "scammed"

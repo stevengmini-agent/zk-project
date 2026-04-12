@@ -1,8 +1,8 @@
 "use client";
 
 import type { WatchComment } from "@/lib/api/comments";
-import type { StoryType } from "@/lib/mock-watch-feed";
-import { STORY_TYPE_LABEL } from "@/lib/mock-watch-feed";
+import type { StoryType } from "@/lib/watch";
+import { STORY_TYPE_LABEL } from "@/lib/watch";
 import { btnPrimary } from "@/components/ui/agent-ui";
 
 const STORY_TAG_KEYS = new Set<string>([

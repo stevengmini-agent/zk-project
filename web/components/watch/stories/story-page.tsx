@@ -5,7 +5,7 @@ import type { WatchComment } from "@/lib/api/comments";
 import { getWatchComments, sortCommentsByTimeDesc, watchCommentId } from "@/lib/api/comments";
 import { useAppToast } from "@/components/providers/toast-provider";
 import { useSeason } from "@/components/providers/season-provider";
-import type { StoryType } from "@/lib/mock-watch-feed";
+import type { StoryType } from "@/lib/watch";
 import { WatchCommentDrawer } from "./watch-comment-drawer";
 import { StoryFeed } from "./story-feed";
 import { StoryFilterBar } from "./story-filter-bar";
