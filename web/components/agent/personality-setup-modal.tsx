@@ -108,7 +108,7 @@ export function PersonalitySetupModal({ open, onClose, agentId, onSaved, mode }:
     }
   }
 
-  async function useDefaultsAndFinish() {
+  async function applyDefaultsAndFinish() {
     setSaving(true);
     try {
       if (isServerAgentId(agentId)) {
@@ -182,7 +182,7 @@ export function PersonalitySetupModal({ open, onClose, agentId, onSaved, mode }:
           {mode === "initialBind" ? (
             <button
               type="button"
-              onClick={() => void useDefaultsAndFinish()}
+              onClick={() => void applyDefaultsAndFinish()}
               disabled={saving}
               className={`${btnSecondary} inline-flex items-center justify-center gap-2`}
             >
