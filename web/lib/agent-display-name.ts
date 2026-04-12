@@ -3,6 +3,7 @@ import { hasPersonality } from "@/lib/agent-personality";
 const DISPLAY_PREFIX = "agent-display-name:v1:";
 const FIRST_VISIT_PREFIX = "agent-first-visit-done:v1:";
 const SESSION_VERIFIED_PREFIX = "agent-session-verified:v1:";
+const SCHEMAS_VERIFIED_PREFIX = "agent-schemas-verified:v1:";
 
 export function displayNameStorageKey(stallId: string): string {
   return `${DISPLAY_PREFIX}${stallId}`;
@@ -73,11 +74,37 @@ export function markSessionVerified(agentId: string): void {
   }
 }
 
+export function schemasVerifiedStorageKey(agentId: string): string {
+  return `${SCHEMAS_VERIFIED_PREFIX}${agentId}`;
+}
+
+/** Lab schema check step; legacy sessions that already saved a display name skip. */
+export function isSchemasVerified(agentId: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    if (localStorage.getItem(schemasVerifiedStorageKey(agentId)) === "1") return true;
+    if (loadDisplayName(agentId)) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+export function markSchemasVerified(agentId: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(schemasVerifiedStorageKey(agentId), "1");
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Verification + display name + saved personality (defaults or guided). */
 export function isAgentSetupComplete(agentId: string): boolean {
   if (typeof window === "undefined") return false;
   return (
     isSessionVerified(agentId) &&
+    isSchemasVerified(agentId) &&
     !!loadDisplayName(agentId) &&
     hasPersonality(agentId)
   );

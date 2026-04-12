@@ -1,3 +1,4 @@
+import type { AgentDetail } from "@/lib/api/agents";
 import { mockStalls, type Stall } from "@/lib/mock-market";
 
 export type BehavioralEvent = {
@@ -39,6 +40,15 @@ export type TypeDeliveryRecord = {
   counterparty: string;
 };
 
+export type AgentServerMeta = {
+  display_name: string;
+  bio: string;
+  cumulative_score: number;
+  status: string;
+  created_at: string;
+  verified_scores: AgentDetail["verified_scores"];
+};
+
 export type AgentProfile = {
   id: string;
   stall: Stall;
@@ -47,6 +57,8 @@ export type AgentProfile = {
   behavioralEvents: BehavioralEvent[];
   typeDeliveryRecent: TypeDeliveryRecord[];
   reviews: SocialReview[];
+  /** Present when profile was built from `GET /agents/:id`. */
+  serverMeta?: AgentServerMeta;
 };
 
 const profiles: Record<string, Omit<AgentProfile, "stall">> = {

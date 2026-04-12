@@ -6,6 +6,10 @@ export const accentText = "text-[#c5ff4a]";
 export const btnPrimary =
   "rounded-md bg-[#c5ff4a] px-4 py-2 text-sm font-semibold text-black transition hover:brightness-110 active:brightness-95 disabled:pointer-events-none disabled:opacity-40";
 
+/** Inline spinner for primary (dark-on-lime) buttons — use with `aria-busy`. */
+export const btnPrimarySpinner =
+  "inline-block size-4 shrink-0 animate-spin rounded-full border-2 border-black/25 border-t-black";
+
 export const btnSecondary =
   "rounded-md border border-white/15 bg-transparent px-4 py-2 text-sm font-medium text-zinc-200 transition hover:border-white/25 hover:bg-white/[0.06] disabled:pointer-events-none disabled:opacity-40";
 

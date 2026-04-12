@@ -1,17 +1,18 @@
-import type { StoryCard as StoryCardModel } from "@/lib/mock-watch-feed";
-import { StoryCard } from "./story-card";
+import type { WatchComment } from "@/lib/api/comments";
+import { watchCommentId } from "@/lib/api/comments";
+import { WatchCommentCard } from "./watch-comment-card";
 
 export function StoryFeed({
   items,
   onOpenDetail,
 }: {
-  items: StoryCardModel[];
+  items: WatchComment[];
   onOpenDetail: (id: string) => void;
 }) {
   if (items.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-zinc-800 bg-zinc-950/40 p-10 text-center text-sm text-zinc-500">
-        No stories match these filters (mock data). Try &quot;All&quot; time or another category.
+        No comments for this filter. Try another category or check back later.
       </div>
     );
   }
@@ -19,7 +20,11 @@ export function StoryFeed({
   return (
     <div className="space-y-4">
       {items.map((item) => (
-        <StoryCard key={item.id} item={item} onOpenDetail={() => onOpenDetail(item.id)} />
+        <WatchCommentCard
+          key={watchCommentId(item)}
+          item={item}
+          onOpenDetail={() => onOpenDetail(watchCommentId(item))}
+        />
       ))}
     </div>
   );

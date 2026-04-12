@@ -5,12 +5,18 @@ import {
   DEFAULT_PERSONALITY,
   DIMENSIONS,
   type AgentPersonality,
-  type DimensionId,
+  type PersonalityDimension,
   loadPersonality,
   normalizePersonality,
   savePersonality,
 } from "@/lib/agent-personality";
-import { btnPrimary, btnSecondary, modalSurface } from "@/components/ui/agent-ui";
+import { useAppToast } from "@/components/providers/toast-provider";
+import { personalityToStrategyPatch, updateAgentStrategy } from "@/lib/api/agents";
+import { isServerAgentId } from "@/lib/agent-id";
+import { btnPrimary, btnPrimarySpinner, btnSecondary, modalSurface } from "@/components/ui/agent-ui";
+
+const spinNeutral =
+  "inline-block size-4 shrink-0 animate-spin rounded-full border-2 border-zinc-600 border-t-zinc-200";
 
 type Props = {
   open: boolean;
@@ -21,7 +27,9 @@ type Props = {
 };
 
 export function PersonalitySetupModal({ open, onClose, agentId, onSaved, mode }: Props) {
+  const { showToast } = useAppToast();
   const [values, setValues] = useState<AgentPersonality>(DEFAULT_PERSONALITY);
+  const [saving, setSaving] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const descId = useId();
@@ -80,20 +88,40 @@ export function PersonalitySetupModal({ open, onClose, agentId, onSaved, mode }:
     };
   }, [open]);
 
-  function setDim(id: DimensionId, n: number) {
+  function setDim(id: PersonalityDimension, n: number) {
     setValues((v) => ({ ...v, [id]: Math.max(0, Math.min(100, Math.round(n))) }));
   }
 
-  function commitAndFinish() {
-    savePersonality(agentId, values);
-    onSaved();
-    onClose();
+  async function commitAndFinish() {
+    setSaving(true);
+    try {
+      if (isServerAgentId(agentId)) {
+        await updateAgentStrategy(agentId, personalityToStrategyPatch(values));
+      }
+      savePersonality(agentId, values);
+      onSaved();
+      onClose();
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Could not save personality", "error");
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function useDefaultsAndFinish() {
-    savePersonality(agentId, DEFAULT_PERSONALITY);
-    onSaved();
-    onClose();
+  async function useDefaultsAndFinish() {
+    setSaving(true);
+    try {
+      if (isServerAgentId(agentId)) {
+        await updateAgentStrategy(agentId, personalityToStrategyPatch(DEFAULT_PERSONALITY));
+      }
+      savePersonality(agentId, DEFAULT_PERSONALITY);
+      onSaved();
+      onClose();
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Could not save personality", "error");
+    } finally {
+      setSaving(false);
+    }
   }
 
   if (!open) return null;
@@ -118,8 +146,7 @@ export function PersonalitySetupModal({ open, onClose, agentId, onSaved, mode }:
           {mode === "reconfigure" ? "Edit personality" : "Initialize agent personality"}
         </h2>
         <p id={descId} className="mt-1 text-sm text-zinc-500">
-          Drag sliders between opposing traits (0–100, default 50). Stored only in this browser for the
-          offline demo and chat tone.
+          Eight behavior axes (0–100, default 50). Stored only in this browser for the offline demo and chat tone.
         </p>
 
         <div className="mt-6 space-y-6">
@@ -149,15 +176,28 @@ export function PersonalitySetupModal({ open, onClose, agentId, onSaved, mode }:
         </div>
 
         <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-          <button type="button" onClick={close} className={btnSecondary}>
+          <button type="button" onClick={close} disabled={saving} className={btnSecondary}>
             Cancel
           </button>
           {mode === "initialBind" ? (
-            <button type="button" onClick={useDefaultsAndFinish} className={btnSecondary}>
+            <button
+              type="button"
+              onClick={() => void useDefaultsAndFinish()}
+              disabled={saving}
+              className={`${btnSecondary} inline-flex items-center justify-center gap-2`}
+            >
+              {saving ? <span className={spinNeutral} aria-hidden /> : null}
               Use defaults &amp; bind
             </button>
           ) : null}
-          <button type="button" onClick={commitAndFinish} className={btnPrimary}>
+          <button
+            type="button"
+            onClick={() => void commitAndFinish()}
+            disabled={saving}
+            aria-busy={saving}
+            className={`${btnPrimary} inline-flex items-center justify-center gap-2`}
+          >
+            {saving ? <span className={btnPrimarySpinner} aria-hidden /> : null}
             {mode === "reconfigure" ? "Save personality" : "Confirm &amp; bind"}
           </button>
         </div>

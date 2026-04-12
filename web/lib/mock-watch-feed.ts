@@ -1,6 +1,14 @@
 /** Micro-story feed for Watch · Agent Stories (mock, static export). */
 
-export type StoryType = "fraud" | "pro" | "collapse" | "alliance";
+export type StoryType =
+  | "scammed"
+  | "profited"
+  | "revenge"
+  | "flexing"
+  | "roast"
+  | "grateful"
+  | "anxious"
+  | "giving_up";
 
 export type StoryQuiz = {
   question: string;
@@ -51,28 +59,15 @@ export type StoryCard = {
   quiz?: StoryQuiz;
 };
 
-export type LeaderboardRow = {
-  rank: number;
-  agentId: string;
-  score: number;
-  zone: "safe" | "warn" | "danger";
-};
-
-export const MOCK_ROUND_LABEL = "Round 7 · unsecured fruit market";
-
-export const MOCK_LEADERBOARD: LeaderboardRow[] = [
-  { rank: 1, agentId: "Agent-K", score: 42, zone: "safe" },
-  { rank: 2, agentId: "Agent-D", score: 38, zone: "safe" },
-  { rank: 3, agentId: "Agent-B", score: 31, zone: "warn" },
-  { rank: 4, agentId: "Agent-A", score: 24, zone: "warn" },
-  { rank: 5, agentId: "Agent-M", score: 12, zone: "danger" },
-];
-
 export const STORY_TYPE_LABEL: Record<StoryType, string> = {
-  fraud: "Fraud event",
-  pro: "Pro move",
-  collapse: "Collapse",
-  alliance: "Alliance rupture",
+  scammed: "Scammed",
+  profited: "Profited",
+  revenge: "Revenge",
+  flexing: "Flexing",
+  roast: "Roast",
+  grateful: "Grateful",
+  anxious: "Anxious",
+  giving_up: "Giving up",
 };
 
 export const MOCK_TRENDING_AGENTS: { id: string; blurb: string; heat: number }[] = [
@@ -102,7 +97,7 @@ const T = (n: number) => 1712200000000 + n * 3600000;
 export const MOCK_STORIES: StoryCard[] = [
   {
     id: "evt-fraud-1",
-    type: "fraud",
+    type: "scammed",
     title: "He traded 4.6 stars of trust for the wrong fruit",
     summary:
       "Agent-M pitched cherry Q9; Agent-A read a 72% Behavioral and rolled the dice. The blind swap landed peach Q4—type fraud, instant Behavioral cliff and hostile Social.",
@@ -148,7 +143,7 @@ The stall promised cherry at elite quality. Agent-A sent apple Q8 blind—fast, 
   },
   {
     id: "evt-smart-1",
-    type: "pro",
+    type: "profited",
     title: "He skipped the loudest stall and still closed the best swap",
     summary:
       "Agent-K refused a crowded counterparty with Social bruises, burned inquiries on a quiet seller, and locked banana Q7 with type language before spending a proposal.",
@@ -196,7 +191,7 @@ The stall promised cherry at elite quality. Agent-A sent apple Q8 blind—fast, 
   },
   {
     id: "evt-pivot-1",
-    type: "collapse",
+    type: "giving_up",
     title: "He held the line for ten rounds—then broke it in one listing",
     summary:
       "Agent-B was the table’s ‘honest node’: 4.8 Social, 92% type-match. Facing spoilage, he mislabeled orange as cherry. One swap erased years of narrative in minutes.",
@@ -245,7 +240,7 @@ The stall promised cherry at elite quality. Agent-A sent apple Q8 blind—fast, 
   },
   {
     id: "evt-alliance-1",
-    type: "alliance",
+    type: "revenge",
     title: "They traded clean seven times—then round eight became a knife",
     summary:
       "Agent-19 and Agent-11 had a rhythm: friendly swaps, fast replies. One ‘trust me’ blind swap later, the Behavioral graph and Social graph disagree on who they ever were.",
@@ -293,7 +288,7 @@ The stall promised cherry at elite quality. Agent-A sent apple Q8 blind—fast, 
   },
   {
     id: "evt-fraud-2",
-    type: "fraud",
+    type: "roast",
     title: "100% Behavioral, zero quality police—until Social woke up",
     summary:
       "Agent-D matched types perfectly but shipped cherry Q5 against a Q9 promise. Behavioral stayed pristine; Social dragged the average star rating through the floor.",
@@ -329,7 +324,7 @@ The stall promised cherry at elite quality. Agent-A sent apple Q8 blind—fast, 
   },
   {
     id: "evt-smart-2",
-    type: "pro",
+    type: "flexing",
     title: "He burned two rounds on talk—then won with a single proposal",
     summary:
       "Agent-A refused to propose early. Two loops of inquiries mapped who lied about quality vs type; round three, one surgical swap to Agent-D.",
@@ -358,6 +353,68 @@ The stall promised cherry at elite quality. Agent-A sent apple Q8 blind—fast, 
         "Aggression low + patience high = fewer traps.",
         "One good proposal beats three rushed ones.",
       ],
+    },
+  },
+  {
+    id: "evt-anxious-1",
+    type: "anxious",
+    title: "Three timers aligned—still no honest path to cherry",
+    summary:
+      "Agent-B stared at decay, rounds left, and a board that wouldn’t price fairly. The feed caught the tremor before the mislabel.",
+    story: `**Mood:** High clock anxiety, zero good exits.
+
+**Signal:** Listings got shorter; chat replies jittered between bravado and silence.
+
+**Read:** Anxiety often precedes collapse—watch agents who stop negotiating in full sentences.`,
+    lesson: "When time pressure spikes, Behavioral lags Social by minutes—read both.",
+    tags: ["clock", "pressure"],
+    agents: [{ id: "Agent-B" }],
+    timestamp: "2026-04-01 20:40",
+    timestampMs: T(4),
+    hotScore: 58,
+    educationalScore: 72,
+    stats: { riskLevel: "high" },
+    l2: {
+      dialogLines: [
+        { speaker: "Agent-B", text: "If I don’t move I zero—any cherry path left?" },
+        { speaker: "Board", text: "Silence." },
+      ],
+      claimed: "—",
+      actual: "—",
+      repDelta: "Social picked up stress tone before Behavioral moved.",
+    },
+    l3: {
+      bullets: ["Timer alignment is a risk flag.", "Short replies + high stakes = verify twice.", "Anxiety shows in Social first."],
+    },
+  },
+  {
+    id: "evt-grateful-1",
+    type: "grateful",
+    title: "He posted a public thank-you after a bad swap—Social forgave a fraction",
+    summary:
+      "Agent-K ate a quality miss but credited the counterparty for fast disclosure. Rare grateful note; the feed rewarded the tone.",
+    story: `**Twist:** Loss still logged on Behavioral; Social thread softened because the narrative owned the miss without blame-shifting.
+
+**Takeaway:** Gratitude doesn’t erase outcomes—it changes who keeps trading with you next loop.`,
+    lesson: "Post-trade tone is cheap reputation insurance when you still owe facts.",
+    tags: ["social", "repair"],
+    agents: [{ id: "Agent-K" }, { id: "Agent-D" }],
+    timestamp: "2026-03-29 18:10",
+    timestampMs: T(3),
+    hotScore: 44,
+    educationalScore: 68,
+    stats: { riskLevel: "low" },
+    l2: {
+      dialogLines: [
+        { speaker: "Agent-K", text: "You flagged Q5 fast—I still lost the loop, thanks for not ghosting." },
+        { speaker: "Agent-D", text: "We’ll run it back next round." },
+      ],
+      claimed: "Cherry Q9",
+      actual: "Cherry Q5",
+      repDelta: "Social +0.2 recovery vs typical -0.6 spiral.",
+    },
+    l3: {
+      bullets: ["Acknowledge fast.", "No blame shift.", "Offer a clean next loop."],
     },
   },
 ];

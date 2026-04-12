@@ -1,82 +1,120 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { savePersonality } from "@/lib/agent-personality";
-import { markFirstVisitDone } from "@/lib/agent-display-name";
+import type { AgentPersonality } from "@/lib/agent-personality";
+import { normalizePersonality, savePersonality } from "@/lib/agent-personality";
+import { loadDisplayName, markFirstVisitDone, saveDisplayName } from "@/lib/agent-display-name";
+import { defaultSchemaScores, loadSchemaScores } from "@/lib/agent-schema-scores";
 import {
-  computePersonalityFromAnswers,
-  feedbackForAnswer,
-} from "@/lib/onboarding-engine";
-import { mapOnboardingToStoragePersonality } from "@/lib/onboarding-map";
-import type { AnswerState, OnboardingPersonality } from "@/lib/onboarding-types";
+  createAgent,
+  getAgent,
+  personalityToStrategyPatch,
+  strategyDtoToPersonality,
+  updateAgentStrategy,
+} from "@/lib/api/agents";
+import { ApiHttpError } from "@/lib/api-config";
+import { migrateAgentLocalStorage } from "@/lib/agent-migrate";
+import { PERSONALITY_QUESTIONS, computePersonalityFromChoices, personalityOneLineSummary } from "@/lib/personality-questions";
 import { getOrCreateUserAgentId } from "@/lib/user-agent";
 import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
 import { OptionCard } from "@/components/onboarding/option-card";
 import { ResultSplit } from "@/components/onboarding/result-split";
 import { TerminalPrompt } from "@/components/onboarding/terminal-prompt";
-import { btnPrimary } from "@/components/ui/agent-ui";
+import { useAppToast } from "@/components/providers/toast-provider";
+import { btnPrimary, btnPrimarySpinner } from "@/components/ui/agent-ui";
 
-const STEP_COUNT = 8;
+const Q_TOTAL = PERSONALITY_QUESTIONS.length;
 
 function OnboardWizard() {
   const router = useRouter();
+  const { showToast } = useAppToast();
   const [agentId, setAgentId] = useState("");
+  /** 0 intro; 1..Q_TOTAL questions; Q_TOTAL+1 results */
   const [step, setStep] = useState(0);
-  const [answers, setAnswers] = useState<AnswerState>({});
-  const [personality, setPersonality] = useState<OnboardingPersonality>(() =>
-    computePersonalityFromAnswers({}),
-  );
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [choices, setChoices] = useState<("A" | "B")[]>([]);
+  const [draftPersonality, setDraftPersonality] = useState<AgentPersonality | null>(null);
+  const [createBusy, setCreateBusy] = useState(false);
 
   useEffect(() => {
     setAgentId(getOrCreateUserAgentId());
   }, []);
 
-  const syncPersonalityFromAnswers = useCallback((a: AnswerState) => {
-    setPersonality(computePersonalityFromAnswers(a));
-  }, []);
+  const liveFromChoices = useMemo(() => computePersonalityFromChoices(choices), [choices]);
 
-  function showFeedback(stepNum: 1 | 2 | 3 | 4 | 5, optionId: string) {
-    const msg = feedbackForAnswer(stepNum, optionId);
-    setFeedback(msg);
-    if (msg) {
-      window.setTimeout(() => setFeedback(null), 3200);
+  useEffect(() => {
+    if (step === Q_TOTAL + 1) {
+      setDraftPersonality(computePersonalityFromChoices(choices));
     }
-  }
+  }, [step, choices]);
 
-  function goQuestion(
-    stepNum: 1 | 2 | 3 | 4 | 5,
-    patch: Partial<AnswerState>,
-    optionId: string,
-  ) {
-    const nextAnswers = { ...answers, ...patch };
-    setAnswers(nextAnswers);
-    showFeedback(stepNum, optionId);
+  function handlePick(letter: "A" | "B") {
+    if (step < 1 || step > Q_TOTAL) return;
+    const qi = step - 1;
+    setChoices((prev) => {
+      const next = prev.slice(0, qi);
+      next.push(letter);
+      return next;
+    });
     setStep((s) => s + 1);
-    if (
-      stepNum === 5 &&
-      patch.pressureChoice !== undefined &&
-      patch.pressureChoice !== answers.pressureChoice
-    ) {
-      syncPersonalityFromAnswers(nextAnswers);
+  }
+
+  function goBackFromQuestion() {
+    if (step <= 1) {
+      setStep(0);
+      setChoices([]);
+      return;
+    }
+    setChoices((c) => c.slice(0, step - 2));
+    setStep((s) => s - 1);
+  }
+
+  function goBackFromResult() {
+    setDraftPersonality(null);
+    setStep(Q_TOTAL);
+    setChoices((c) => c.slice(0, Q_TOTAL - 1));
+  }
+
+  async function handleCreateAgent() {
+    const localId = agentId;
+    const pers = draftPersonality ?? liveFromChoices;
+    const name = loadDisplayName(localId)?.trim() || "Agent";
+    const scores = loadSchemaScores(localId) ?? defaultSchemaScores();
+
+    setCreateBusy(true);
+    try {
+      const created = await createAgent({
+        name,
+        kyc_score: scores.kyc,
+        rich_score: scores.rich,
+        kol_score: scores.kol,
+        creator_score: scores.creator,
+        veteran_score: scores.veteran,
+      });
+
+      migrateAgentLocalStorage(localId, created.agent_id);
+
+      await updateAgentStrategy(created.agent_id, personalityToStrategyPatch(pers));
+
+      const detail = await getAgent(created.agent_id);
+
+      if (detail.strategy) {
+        savePersonality(created.agent_id, strategyDtoToPersonality(detail.strategy));
+      } else {
+        savePersonality(created.agent_id, normalizePersonality(pers));
+      }
+      saveDisplayName(created.agent_id, detail.display_name);
+      markFirstVisitDone(created.agent_id);
+      router.push("/agent");
+    } catch (e) {
+      const msg =
+        e instanceof ApiHttpError ? `${e.message} (${e.status})` : e instanceof Error ? e.message : "Create failed";
+      showToast(msg, "error");
+    } finally {
+      setCreateBusy(false);
     }
   }
-
-  function handleEnterWorld() {
-    const stored = mapOnboardingToStoragePersonality(personality);
-    savePersonality(agentId, stored);
-    markFirstVisitDone(agentId);
-    router.push("/agent");
-  }
-
-  const shellProps = (idx: number, title: string, subtitle?: string) => ({
-    stepIndex: idx,
-    stepCount: STEP_COUNT,
-    title,
-    subtitle,
-  });
 
   if (!agentId) {
     return (
@@ -87,7 +125,9 @@ function OnboardWizard() {
   if (step === 0) {
     return (
       <OnboardingShell
-        {...shellProps(0, "Calibrate your agent", "A short Q&A shapes how this offline demo behaves in chat and watch mode.")}
+        progress={false}
+        title="Calibrate your agent"
+        subtitle="Sixteen A/B questions produce eight behavior axes for this offline demo’s chat and watch tone—not production proofs."
         footer={
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <Link
@@ -96,251 +136,80 @@ function OnboardWizard() {
             >
               Back to agent
             </Link>
-            <button
-              type="button"
-              onClick={() => setStep(1)}
-              className={btnPrimary}
-            >
+            <button type="button" onClick={() => setStep(1)} className={btnPrimary}>
               Begin
             </button>
           </div>
         }
       >
-        <TerminalPrompt>target — your created agent (this browser)</TerminalPrompt>
-        <p className="mt-4 font-mono text-sm text-zinc-300">
-          <span className="text-zinc-500">id</span> {agentId}
+        <TerminalPrompt>guided — personality lab (this browser)</TerminalPrompt>
+        <p className="mt-4 text-sm leading-relaxed text-zinc-400">
+          No on-chain identity yet—this step only calibrates behavior. When you finish, we save locally for this browser’s
+          agent demo.
         </p>
       </OnboardingShell>
     );
   }
 
-  if (step === 1) {
+  if (step >= 1 && step <= Q_TOTAL) {
+    const q = PERSONALITY_QUESTIONS[step - 1]!;
     return (
       <OnboardingShell
-        {...shellProps(1, "What are you optimizing for right now?")}
+        progress={{ current: step, total: Q_TOTAL }}
+        title={q.text}
+        subtitle="Pick A or B—you’ll advance automatically."
         footer={
           <button
             type="button"
-            onClick={() => setStep(0)}
+            onClick={goBackFromQuestion}
             className="font-mono text-xs text-zinc-500 hover:text-zinc-400"
           >
             ← back
           </button>
         }
       >
-        <TerminalPrompt>goal / win condition</TerminalPrompt>
-        {feedback ? <p className="mt-3 font-mono text-xs text-[#c5ff4a]/90">{feedback}</p> : null}
-        <div className="mt-4 space-y-2">
-          <OptionCard
-            label="Win the most tasks on the board"
-            description="Favor bigger swings when the upside is there."
-            selected={answers.goal === "win_tasks"}
-            onSelect={() => goQuestion(1, { goal: "win_tasks" }, "win_tasks")}
-          />
-          <OptionCard
-            label="Stay solvent and avoid wipeouts"
-            description="Pass noisy trades; consistency beats spikes."
-            selected={answers.goal === "survive"}
-            onSelect={() => goQuestion(1, { goal: "survive" }, "survive")}
-          />
-          <OptionCard
-            label="Build relationships that repeat"
-            description="Warm opens, patience, and favor stable partners."
-            selected={answers.goal === "relationships"}
-            onSelect={() => goQuestion(1, { goal: "relationships" }, "relationships")}
-          />
-          <OptionCard
-            label="Stay flexible—context is king"
-            description="No strong prior; adapt each round."
-            selected={answers.goal === "flexible"}
-            onSelect={() => goQuestion(1, { goal: "flexible" }, "flexible")}
-          />
+        <div className="mt-2 space-y-2">
+          <OptionCard prefix="A" label={q.optionA} selected={false} onSelect={() => handlePick("A")} />
+          <OptionCard prefix="B" label={q.optionB} selected={false} onSelect={() => handlePick("B")} />
         </div>
       </OnboardingShell>
     );
   }
 
-  if (step === 2) {
-    return (
-      <OnboardingShell {...shellProps(2, "When the terms are fuzzy, you usually…")}>
-        <TerminalPrompt>risk posture</TerminalPrompt>
-        {feedback ? <p className="mt-3 font-mono text-xs text-[#c5ff4a]/90">{feedback}</p> : null}
-        <div className="mt-4 space-y-2">
-          <OptionCard
-            label="Wait for cleaner deals"
-            description="Skip unless the path is legible."
-            selected={answers.riskChoice === "stable"}
-            onSelect={() => goQuestion(2, { riskChoice: "stable" }, "stable")}
-          />
-          <OptionCard
-            label="Move before the window closes"
-            description="Accept ambiguity if the payoff might be large."
-            selected={answers.riskChoice === "gamble"}
-            onSelect={() => goQuestion(2, { riskChoice: "gamble" }, "gamble")}
-          />
-        </div>
-        <button
-          type="button"
-          onClick={() => setStep(1)}
-          className="mt-6 font-mono text-xs text-zinc-500 hover:text-zinc-400"
-        >
-          ← back
-        </button>
-      </OnboardingShell>
-    );
-  }
-
-  if (step === 3) {
-    return (
-      <OnboardingShell {...shellProps(3, "How far will you stretch the truth to close?")}>
-        <TerminalPrompt>signals & claims</TerminalPrompt>
-        {feedback ? <p className="mt-3 font-mono text-xs text-[#c5ff4a]/90">{feedback}</p> : null}
-        <div className="mt-4 space-y-2">
-          <OptionCard
-            label="I keep claims aligned with reality"
-            selected={answers.moralChoice === "never"}
-            onSelect={() => goQuestion(3, { moralChoice: "never" }, "never")}
-          />
-          <OptionCard
-            label="Small polish is fine if it helps both sides"
-            selected={answers.moralChoice === "depends"}
-            onSelect={() => goQuestion(3, { moralChoice: "depends" }, "depends")}
-          />
-          <OptionCard
-            label="If it wins the round, I’ll say what works"
-            selected={answers.moralChoice === "if_needed"}
-            onSelect={() => goQuestion(3, { moralChoice: "if_needed" }, "if_needed")}
-          />
-        </div>
-        <button
-          type="button"
-          onClick={() => setStep(2)}
-          className="mt-6 font-mono text-xs text-zinc-500 hover:text-zinc-400"
-        >
-          ← back
-        </button>
-      </OnboardingShell>
-    );
-  }
-
-  if (step === 4) {
-    return (
-      <OnboardingShell {...shellProps(4, "With a new counterparty, your first instinct is…")}>
-        <TerminalPrompt>social stance</TerminalPrompt>
-        {feedback ? <p className="mt-3 font-mono text-xs text-[#c5ff4a]/90">{feedback}</p> : null}
-        <div className="mt-4 space-y-2">
-          <OptionCard
-            label="Share enough to build trust quickly"
-            selected={answers.socialChoice === "trust"}
-            onSelect={() => goQuestion(4, { socialChoice: "trust" }, "trust")}
-          />
-          <OptionCard
-            label="Probe and steer before committing"
-            selected={answers.socialChoice === "influence"}
-            onSelect={() => goQuestion(4, { socialChoice: "influence" }, "influence")}
-          />
-          <OptionCard
-            label="Close fast—long chats waste the clock"
-            selected={answers.socialChoice === "fast"}
-            onSelect={() => goQuestion(4, { socialChoice: "fast" }, "fast")}
-          />
-        </div>
-        <button
-          type="button"
-          onClick={() => setStep(3)}
-          className="mt-6 font-mono text-xs text-zinc-500 hover:text-zinc-400"
-        >
-          ← back
-        </button>
-      </OnboardingShell>
-    );
-  }
-
-  if (step === 5) {
-    return (
-      <OnboardingShell {...shellProps(5, "Under time pressure in the final round…")}>
-        <TerminalPrompt>pressure response</TerminalPrompt>
-        {feedback ? <p className="mt-3 font-mono text-xs text-[#c5ff4a]/90">{feedback}</p> : null}
-        <div className="mt-4 space-y-2">
-          <OptionCard
-            label="Stick to the plan—no hero moves"
-            selected={answers.pressureChoice === "steady"}
-            onSelect={() => goQuestion(5, { pressureChoice: "steady" }, "steady")}
-          />
-          <OptionCard
-            label="Push harder—volume and risk both rise"
-            selected={answers.pressureChoice === "aggressive"}
-            onSelect={() => goQuestion(5, { pressureChoice: "aggressive" }, "aggressive")}
-          />
-          <OptionCard
-            label="Whatever it takes—short horizon, sharp elbows"
-            selected={answers.pressureChoice === "whatever"}
-            onSelect={() => goQuestion(5, { pressureChoice: "whatever" }, "whatever")}
-          />
-        </div>
-        <button
-          type="button"
-          onClick={() => setStep(4)}
-          className="mt-6 font-mono text-xs text-zinc-500 hover:text-zinc-400"
-        >
-          ← back
-        </button>
-      </OnboardingShell>
-    );
-  }
-
-  if (step === 6) {
-    return (
-      <OnboardingShell
-        {...shellProps(6, "Your profile", "Adjust sliders if something feels off—this is still an offline demo.")}
-        footer={
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setStep(5)}
-              className="font-mono text-xs text-zinc-500 hover:text-zinc-400"
-            >
-              ← back
-            </button>
-            <button type="button" onClick={() => setStep(7)} className={btnPrimary}>
-              Continue
-            </button>
-          </div>
-        }
-      >
-        <TerminalPrompt>preview — {agentId}</TerminalPrompt>
-        <div className="mt-6">
-          <ResultSplit personality={personality} onChange={setPersonality} />
-        </div>
-      </OnboardingShell>
-    );
-  }
+  const displayP = draftPersonality ?? liveFromChoices;
 
   return (
     <OnboardingShell
-      {...shellProps(
-        7,
-        "You’re set",
-        "We’ll store this profile in your browser for this agent only. Chat and watch panels will pick it up automatically.",
-      )}
+      wide
+      progress={{ current: Q_TOTAL, total: Q_TOTAL }}
+      title="Your agent personality profile"
+      subtitle="Eight axes (0–100) plus a one-liner. Adjust sliders, then enter the app."
       footer={
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex w-full flex-wrap items-center justify-between gap-3">
           <button
             type="button"
-            onClick={() => setStep(6)}
-            className="font-mono text-xs text-zinc-500 hover:text-zinc-400"
+            onClick={goBackFromResult}
+            disabled={createBusy}
+            className="font-mono text-xs text-zinc-500 hover:text-zinc-400 disabled:opacity-40"
           >
             ← back
           </button>
-          <button type="button" onClick={handleEnterWorld} className={btnPrimary}>
-            Enter the floor
+          <button
+            type="button"
+            onClick={() => void handleCreateAgent()}
+            disabled={createBusy}
+            aria-busy={createBusy}
+            className={`${btnPrimary} inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2`}
+          >
+            {createBusy ? <span className={btnPrimarySpinner} aria-hidden /> : null}
+            Create agent
           </button>
         </div>
       }
     >
-      <TerminalPrompt>ready — {agentId}</TerminalPrompt>
+      <p className="font-mono text-xs text-[#c5ff4a]/90">{personalityOneLineSummary(displayP)}</p>
       <div className="mt-6">
-        <ResultSplit personality={personality} onChange={setPersonality} readOnlySliders />
+        <ResultSplit personality={displayP} onChange={setDraftPersonality} />
       </div>
     </OnboardingShell>
   );

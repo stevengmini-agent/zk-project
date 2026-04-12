@@ -2,7 +2,14 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { AgentChatBox } from "@/components/agent/agent-chat-box";
+import { StrategyChatPanel } from "@/components/agent/strategy-chat-panel";
+import { useAppToast } from "@/components/providers/toast-provider";
+import { generateStrategyFreeTextFromChat, updateAgentStrategy } from "@/lib/api/agents";
+import { isServerAgentId } from "@/lib/agent-id";
 import { btnPrimary, btnSecondary, modalSurface } from "@/components/ui/agent-ui";
+
+const spinNeutral =
+  "inline-block size-4 shrink-0 animate-spin rounded-full border-2 border-zinc-600 border-t-zinc-200";
 
 const strategyKey = (agentId: string) => `agent-strategy:${agentId}`;
 const savedAtKey = (agentId: string) => `agent-strategy-saved-at:${agentId}`;
@@ -10,27 +17,20 @@ const savedAtKey = (agentId: string) => `agent-strategy-saved-at:${agentId}`;
 export function StrategyModal({
   agentId,
   agentDisplayName,
+  /** Narrow trigger for toolbar / card header (default: full-width in flex rows). */
+  compact = false,
 }: {
   agentId: string;
   agentDisplayName: string;
+  compact?: boolean;
 }) {
+  const { showToast } = useAppToast();
   const [open, setOpen] = useState(false);
-  const [text, setText] = useState("");
-  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [strategySaving, setStrategySaving] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   const lastFocusRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
   const descId = useId();
-
-  useEffect(() => {
-    try {
-      setText(localStorage.getItem(strategyKey(agentId)) ?? "");
-      setSavedAt(localStorage.getItem(savedAtKey(agentId)));
-    } catch {
-      setText("");
-      setSavedAt(null);
-    }
-  }, [agentId]);
 
   const close = useCallback(() => setOpen(false), []);
 
@@ -89,26 +89,43 @@ export function StrategyModal({
     }
   }, [open]);
 
-  function saveStrategy() {
-    const iso = new Date().toISOString();
+  async function saveStrategyFromChat() {
+    if (!isServerAgentId(agentId)) {
+      showToast("Strategy save from chat is only available for server agents.", "error");
+      return;
+    }
+    setStrategySaving(true);
     try {
-      localStorage.setItem(strategyKey(agentId), text);
-      localStorage.setItem(savedAtKey(agentId), iso);
-      setSavedAt(iso);
-    } catch {
-      /* ignore */
+      const { free_text } = await generateStrategyFreeTextFromChat(agentId);
+      await updateAgentStrategy(agentId, { freeText: free_text });
+      try {
+        localStorage.setItem(strategyKey(agentId), free_text);
+        localStorage.setItem(savedAtKey(agentId), new Date().toISOString());
+      } catch {
+        /* ignore */
+      }
+      showToast("Strategy text saved from chat.", "info");
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Could not save strategy", "error");
+    } finally {
+      setStrategySaving(false);
     }
   }
 
+  const triggerWrap = compact ? "shrink-0" : "min-w-0 w-full sm:w-auto sm:flex-1";
+  const triggerBtn = compact
+    ? `${btnSecondary} border-[#c5ff4a]/25 text-[#c5ff4a] hover:border-[#c5ff4a]/40 hover:bg-[#c5ff4a]/10 whitespace-nowrap`
+    : `w-full ${btnSecondary} border-[#c5ff4a]/25 text-[#c5ff4a] hover:border-[#c5ff4a]/40 hover:bg-[#c5ff4a]/10`;
+
+  const server = isServerAgentId(agentId);
+
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className={`${btnSecondary} border-[#c5ff4a]/25 text-[#c5ff4a] hover:border-[#c5ff4a]/40 hover:bg-[#c5ff4a]/10`}
-      >
-        Set strategy &amp; chat
-      </button>
+      <div className={triggerWrap}>
+        <button type="button" onClick={() => setOpen(true)} className={triggerBtn}>
+          Set strategy &amp; chat
+        </button>
+      </div>
 
       {open ? (
         <div
@@ -134,64 +151,41 @@ export function StrategyModal({
                 Strategy &amp; chat with {agentDisplayName}
               </h2>
               <p id={descId} className="mt-1 text-sm text-zinc-500">
-                Offline demo: strategy text and chat are stored in this browser only. Replies are
-                rule-based, not a real model.
+                {server
+                  ? "Chat with the strategy advisor. Save runs generate on the server, then writes freeText via PUT /strategy."
+                  : "Offline demo: rule-based chat in this browser only (not connected to the strategy API)."}
               </p>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
-              <details className="rounded-xl border border-zinc-800 bg-zinc-950/50 open:pb-3">
-                <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium text-zinc-300">
-                  Written strategy preset (optional)
-                </summary>
-                <div className="px-3 pt-1">
-                  <textarea
-                    className="mt-2 h-28 w-full resize-y rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600"
-                    placeholder="e.g. Prefer high Behavioral match partners; avoid type fraud…"
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                  />
-                  {savedAt ? (
-                    <p className="mt-1 text-xs text-zinc-500">
-                      Last saved: {new Date(savedAt).toLocaleString()}
-                    </p>
-                  ) : null}
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={saveStrategy}
-                      className={btnSecondary}
-                    >
-                      Save strategy
-                    </button>
-                  </div>
-                </div>
-              </details>
-
-              <div className="mt-4 flex min-h-[280px] flex-1 flex-col">
+            <div className="min-h-0 shrink-0 p-4 sm:p-5">
+              {server ? (
+                <StrategyChatPanel agentId={agentId} />
+              ) : (
                 <AgentChatBox
                   agentId={agentId}
                   agentDisplayName={agentDisplayName}
-                  className="min-h-[280px] flex-1"
+                  className="h-[420px] min-h-0"
                 />
-              </div>
+              )}
             </div>
 
             <div className="shrink-0 border-t border-zinc-800 p-4 sm:flex sm:justify-end sm:gap-2 sm:p-5">
-              <button
-                type="button"
-                onClick={() => {
-                  saveStrategy();
-                  close();
-                }}
-                className={`w-full sm:w-auto ${btnSecondary}`}
-              >
-                Save strategy &amp; close
-              </button>
+              {server ? (
+                <button
+                  type="button"
+                  disabled={strategySaving}
+                  onClick={() => void saveStrategyFromChat()}
+                  className={`w-full sm:w-auto ${btnSecondary} inline-flex items-center justify-center gap-2`}
+                >
+                  {strategySaving ? <span className={spinNeutral} aria-hidden /> : null}
+                  Save strategy
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={close}
-                className={`mt-2 w-full sm:mt-0 sm:w-auto ${btnPrimary}`}
+                disabled={strategySaving}
+                className={`w-full sm:w-auto ${btnPrimary}`}
               >
                 Close
               </button>

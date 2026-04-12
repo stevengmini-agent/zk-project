@@ -4,15 +4,29 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DEFAULT_PERSONALITY, hasPersonality, savePersonality } from "@/lib/agent-personality";
 import {
+  isSchemasVerified,
   isSessionVerified,
   loadDisplayName,
   markFirstVisitDone,
+  markSchemasVerified,
   markSessionVerified,
   saveDisplayName,
 } from "@/lib/agent-display-name";
+import { defaultSchemaScores, saveSchemaScores, type SchemaScores } from "@/lib/agent-schema-scores";
+import { useAppToast } from "@/components/providers/toast-provider";
 import { btnPrimary, btnSecondary, inputDark, modalBackdrop, modalSurface } from "@/components/ui/agent-ui";
 
-type Phase = "verify" | "name" | "behavior";
+type Phase = "verify" | "schemas" | "name" | "behavior";
+
+const SCHEMA_ROWS = [
+  { id: "kyc", label: "KYC", blurb: "Identity traceability", passRate: 0.5 },
+  { id: "rich", label: "Rich", blurb: "Economic strength", passRate: 0.25 },
+  { id: "kol", label: "KOL", blurb: "Public influence", passRate: 0.2 },
+  { id: "creator", label: "Creator", blurb: "Content output", passRate: 0.3 },
+  { id: "veteran", label: "Veteran", blurb: "Internet tenure", passRate: 0.35 },
+] as const;
+
+type SchemaId = (typeof SCHEMA_ROWS)[number]["id"];
 
 type Props = {
   open: boolean;
@@ -22,23 +36,27 @@ type Props = {
 
 export function AgentFirstVisitModal({ open, agentId, onCompleted }: Props) {
   const router = useRouter();
+  const { showToast } = useAppToast();
   const titleId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [phase, setPhase] = useState<Phase>("verify");
   const [ack, setAck] = useState(false);
-  const [verifying, setVerifying] = useState(false);
-  const [verifiedFlash, setVerifiedFlash] = useState(false);
+  const [schemaScores, setSchemaScores] = useState<Partial<Record<SchemaId, number>>>({});
 
   const [name, setName] = useState("");
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
-    setError(null);
     if (!isSessionVerified(agentId)) {
       setPhase("verify");
       setAck(false);
+      setSchemaScores({});
+      return;
+    }
+    if (!isSchemasVerified(agentId)) {
+      setPhase("schemas");
+      setSchemaScores({});
       return;
     }
     const existing = loadDisplayName(agentId);
@@ -69,18 +87,25 @@ export function AgentFirstVisitModal({ open, agentId, onCompleted }: Props) {
     return () => document.removeEventListener("keydown", onKey);
   }, [open]);
 
-  function runVerification() {
-    if (!ack || verifying) return;
-    setVerifying(true);
-    window.setTimeout(() => {
-      markSessionVerified(agentId);
-      setVerifying(false);
-      setVerifiedFlash(true);
-      window.setTimeout(() => {
-        setVerifiedFlash(false);
-        setPhase("name");
-      }, 900);
-    }, 1400);
+  function continueFromVerify() {
+    if (!ack) return;
+    markSessionVerified(agentId);
+    setPhase("schemas");
+  }
+
+  function verifySchema(id: SchemaId) {
+    const score = Math.floor(Math.random() * 100) + 1;
+    setSchemaScores((prev) => ({ ...prev, [id]: score }));
+  }
+
+  const allSchemasScored = SCHEMA_ROWS.every((row) => schemaScores[row.id] != null);
+
+  function continueFromSchemas() {
+    if (!allSchemasScored) return;
+    const full: SchemaScores = { ...defaultSchemaScores(), ...schemaScores } as SchemaScores;
+    saveSchemaScores(agentId, full);
+    markSchemasVerified(agentId);
+    setPhase("name");
   }
 
   function validateName(): string | null {
@@ -93,11 +118,10 @@ export function AgentFirstVisitModal({ open, agentId, onCompleted }: Props) {
   function continueFromName() {
     const err = validateName();
     if (err) {
-      setError(err);
+      showToast(err, "error");
       return;
     }
     saveDisplayName(agentId, name.trim());
-    setError(null);
     setPhase("behavior");
   }
 
@@ -108,6 +132,11 @@ export function AgentFirstVisitModal({ open, agentId, onCompleted }: Props) {
   }
 
   function startGuided() {
+    const err = validateName();
+    if (err) {
+      showToast(err, "error");
+      return;
+    }
     saveDisplayName(agentId, name.trim());
     router.push("/onboard");
   }
@@ -137,13 +166,57 @@ export function AgentFirstVisitModal({ open, agentId, onCompleted }: Props) {
               />
               <span>I understand this is a local demo and results are not production proofs.</span>
             </label>
+            <button type="button" disabled={!ack} onClick={continueFromVerify} className={`${btnPrimary} mt-8 w-full min-h-[44px]`}>
+              Next
+            </button>
+          </>
+        ) : null}
+
+        {phase === "schemas" ? (
+          <>
+            <h2 id={titleId} className="mt-4 text-2xl font-semibold tracking-tight text-white">
+              Schema verification
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-zinc-400">
+              Run a local lab check for each reputation signal. Scores are random 1–100 placeholders—still not production
+              proofs.
+            </p>
+            <ul className="mt-6 space-y-4">
+              {SCHEMA_ROWS.map((row) => {
+                const score = schemaScores[row.id];
+                const pct = Math.round(row.passRate * 100);
+                return (
+                  <li
+                    key={row.id}
+                    className="flex flex-col gap-2 rounded-lg border border-white/10 bg-black/30 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-zinc-100">{row.label}</p>
+                      <p className="text-xs text-zinc-500">
+                        {row.blurb} · simulated pass rate {pct}%
+                      </p>
+                      {score != null ? (
+                        <p className="mt-1 font-mono text-xs text-[#c5ff4a]">Score: {score}</p>
+                      ) : null}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => verifySchema(row.id)}
+                      className={`${btnSecondary} shrink-0 px-4 py-2 text-xs sm:min-w-[88px]`}
+                    >
+                      Verify
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
             <button
               type="button"
-              disabled={!ack || verifying || verifiedFlash}
-              onClick={runVerification}
+              disabled={!allSchemasScored}
+              onClick={continueFromSchemas}
               className={`${btnPrimary} mt-8 w-full min-h-[44px]`}
             >
-              {verifying ? "Verifying…" : verifiedFlash ? "Verified" : "Run verification"}
+              Next
             </button>
           </>
         ) : null}
@@ -153,10 +226,7 @@ export function AgentFirstVisitModal({ open, agentId, onCompleted }: Props) {
             <h2 id={titleId} className="mt-4 text-2xl font-semibold tracking-tight text-white">
               Name your agent
             </h2>
-            <p className="mt-3 text-sm text-zinc-400">
-              This label is yours only in this browser. Your internal stall id is{" "}
-              <span className="font-mono text-zinc-300">{agentId}</span>.
-            </p>
+            <p className="mt-3 text-sm text-zinc-400">This display label is yours only in this browser. You can change it later.</p>
             <label htmlFor="agent-first-name" className="mt-6 block font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-500">
               Display name
             </label>
@@ -168,14 +238,12 @@ export function AgentFirstVisitModal({ open, agentId, onCompleted }: Props) {
               value={name}
               onChange={(e) => {
                 setName(e.target.value);
-                setError(null);
               }}
               placeholder="How should we call your agent?"
               className={`${inputDark} mt-2`}
             />
-            {error ? <p className="mt-2 text-xs text-red-400/90">{error}</p> : null}
             <button type="button" onClick={continueFromName} className={`${btnPrimary} mt-8 w-full min-h-[44px]`}>
-              Continue
+              Next
             </button>
           </>
         ) : null}
@@ -186,7 +254,7 @@ export function AgentFirstVisitModal({ open, agentId, onCompleted }: Props) {
               Set how your agent behaves
             </h2>
             <p className="mt-3 text-sm text-zinc-400">
-              Reputation panels and chat use saved personality sliders. Pick guided Q&amp;A or neutral defaults—you can edit
+              Reputation panels and chat use saved 8-axis personality (16-question guided setup or defaults). You can edit
               anytime.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">

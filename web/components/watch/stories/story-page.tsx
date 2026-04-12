@@ -1,56 +1,56 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import type { StoryCard, StoryType } from "@/lib/mock-watch-feed";
-import { MOCK_LEADERBOARD, MOCK_ROUND_LABEL, MOCK_STORIES } from "@/lib/mock-watch-feed";
-import { StoryDetailDrawer } from "./story-detail-drawer";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { WatchComment } from "@/lib/api/comments";
+import { getWatchComments, sortCommentsByTimeDesc, watchCommentId } from "@/lib/api/comments";
+import { useAppToast } from "@/components/providers/toast-provider";
+import { useSeason } from "@/components/providers/season-provider";
+import type { StoryType } from "@/lib/mock-watch-feed";
+import { WatchCommentDrawer } from "./watch-comment-drawer";
 import { StoryFeed } from "./story-feed";
-import type { SortMode, TimeScope } from "./story-filter-bar";
 import { StoryFilterBar } from "./story-filter-bar";
 import { StoryHeader } from "./story-header";
-import { TrendingSidebar } from "./trending-sidebar";
 
-const BASE_MS = 1712200000000;
-const HOUR_MS = 3600000;
-function storyTime(n: number) {
-  return BASE_MS + n * HOUR_MS;
-}
-
-function filterByTime(items: StoryCard[], scope: TimeScope): StoryCard[] {
-  if (scope === "all") return items;
-  if (scope === "today") return items.filter((s) => s.timestampMs >= storyTime(8));
-  return items.filter((s) => s.timestampMs >= storyTime(6));
-}
-
-function filterByCategory(items: StoryCard[], category: StoryType | "all"): StoryCard[] {
-  if (category === "all") return items;
-  return items.filter((s) => s.type === category);
-}
-
-function sortStories(items: StoryCard[], sort: SortMode): StoryCard[] {
-  const copy = [...items];
-  if (sort === "latest") copy.sort((a, b) => b.timestampMs - a.timestampMs);
-  else if (sort === "hot") copy.sort((a, b) => b.hotScore - a.hotScore);
-  else copy.sort((a, b) => b.educationalScore - a.educationalScore);
-  return copy;
-}
+const FALLBACK_ROUND = 1;
 
 export function StoryPage() {
-  const [timeScope, setTimeScope] = useState<TimeScope>("all");
+  const { showToast } = useAppToast();
+  const { seasonId, status: seasonStatus, currentRound } = useSeason();
+  const watchRound = currentRound ?? FALLBACK_ROUND;
   const [category, setCategory] = useState<StoryType | "all">("all");
-  const [sort, setSort] = useState<SortMode>("latest");
+  const [items, setItems] = useState<WatchComment[]>([]);
+  const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
 
-  const filtered = useMemo(() => {
-    let list = filterByTime(MOCK_STORIES, timeScope);
-    list = filterByCategory(list, category);
-    return sortStories(list, sort);
-  }, [timeScope, category, sort]);
+  const loadComments = useCallback(async () => {
+    if (seasonStatus !== "ready" || !seasonId) {
+      setItems([]);
+      setLoading(seasonStatus === "loading" || seasonStatus === "idle");
+      return;
+    }
+    setLoading(true);
+    try {
+      const raw = await getWatchComments({
+        round: watchRound,
+        tag: category === "all" ? undefined : category,
+      });
+      setItems(sortCommentsByTimeDesc(raw));
+    } catch (e) {
+      setItems([]);
+      showToast(e instanceof Error ? e.message : "Failed to load comments", "error");
+    } finally {
+      setLoading(false);
+    }
+  }, [seasonId, seasonStatus, watchRound, category, showToast]);
+
+  useEffect(() => {
+    void loadComments();
+  }, [loadComments]);
 
   const activeItem = useMemo(
-    () => (activeId ? MOCK_STORIES.find((s) => s.id === activeId) ?? null : null),
-    [activeId],
+    () => (activeId ? items.find((c) => watchCommentId(c) === activeId) ?? null : null),
+    [activeId, items],
   );
 
   const openDetail = (id: string) => {
@@ -64,20 +64,16 @@ export function StoryPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
-      <StoryHeader roundLabel={MOCK_ROUND_LABEL} leaderboard={MOCK_LEADERBOARD} />
-      <StoryFilterBar
-        timeScope={timeScope}
-        onTimeScope={setTimeScope}
-        category={category}
-        onCategory={setCategory}
-        sort={sort}
-        onSort={setSort}
-      />
-      <div className="grid gap-8 lg:grid-cols-[1fr_280px]">
-        <StoryFeed items={filtered} onOpenDetail={openDetail} />
-        <TrendingSidebar />
-      </div>
-      <StoryDetailDrawer item={activeItem} open={drawerOpen} onClose={closeDrawer} />
+      <StoryHeader round={watchRound} />
+      <StoryFilterBar category={category} onCategory={setCategory} />
+      {seasonStatus === "error" || !seasonId ? (
+        <p className="text-sm text-zinc-500">Comments load after a valid season is available.</p>
+      ) : loading ? (
+        <p className="text-sm text-zinc-500">Loading comments…</p>
+      ) : (
+        <StoryFeed items={items} onOpenDetail={openDetail} />
+      )}
+      <WatchCommentDrawer item={activeItem} open={drawerOpen} onClose={closeDrawer} />
     </div>
   );
 }

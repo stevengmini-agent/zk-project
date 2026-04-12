@@ -1,18 +1,15 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import type { AgentProfile } from "@/lib/mock-agent-profile";
 import { isAgentSetupComplete, loadDisplayName } from "@/lib/agent-display-name";
-import { AgentBindBar } from "@/components/agent/agent-bind-bar";
-import { AgentEditNameModal } from "@/components/agent/agent-edit-name-modal";
 import { AgentFirstVisitModal } from "@/components/agent/agent-first-visit-modal";
-import { AgentPanel } from "@/components/agent/agent-panel";
+import { PersonalitySetupModal } from "@/components/agent/personality-setup-modal";
 import { ProofMockBlock } from "@/components/agent/proof-mock-block";
-import { ReputationTrio } from "@/components/agent/reputation-trio";
 import { StrategyModal } from "@/components/agent/strategy-modal";
-import { Badge } from "@/components/ui";
-import { btnPrimary } from "@/components/ui/agent-ui";
+import { ReputationTrio } from "@/components/agent/reputation-trio";
+import { AgentTradeHistory } from "@/components/agent/agent-trade-history";
+import { btnSecondary } from "@/components/ui/agent-ui";
 
 export function AgentDashboard({
   profile,
@@ -24,8 +21,8 @@ export function AgentDashboard({
 }) {
   const [displayName, setDisplayName] = useState(profile.id);
   const [setupGateOpen, setSetupGateOpen] = useState(false);
-  const [editNameOpen, setEditNameOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [personalityOpen, setPersonalityOpen] = useState(false);
 
   const refreshName = useCallback(() => {
     const n = loadDisplayName(profile.id);
@@ -50,48 +47,34 @@ export function AgentDashboard({
     setSetupGateOpen(false);
   }
 
+  const profileActions = (
+    <>
+      <StrategyModal agentId={profile.id} agentDisplayName={displayName} compact />
+      <button
+        type="button"
+        onClick={() => setPersonalityOpen(true)}
+        className={`shrink-0 whitespace-nowrap ${btnSecondary}`}
+      >
+        Edit personality
+      </button>
+    </>
+  );
+
   return (
     <>
       {isOwnedSession ? (
         <AgentFirstVisitModal open={setupGateOpen} agentId={profile.id} onCompleted={handleSetupCompleted} />
       ) : null}
 
-      <AgentEditNameModal
-        open={editNameOpen}
+      <PersonalitySetupModal
+        open={personalityOpen}
+        onClose={() => setPersonalityOpen(false)}
         agentId={profile.id}
-        onClose={() => setEditNameOpen(false)}
-        onSaved={(n) => setDisplayName(n)}
+        mode="reconfigure"
+        onSaved={() => {}}
       />
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          {isOwnedSession ? (
-            <Badge>Your agent · offline demo</Badge>
-          ) : (
-            <Badge>Demo stall view</Badge>
-          )}
-          <h1 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl">{displayName}</h1>
-          <p className="mt-1 font-mono text-xs text-zinc-500">Stall id · {profile.id}</p>
-          <p className="mt-2 max-w-xl text-sm text-zinc-400">
-            Proof-backed claims meet behavioral and social reputation—how others decide whether to trade with this agent.
-          </p>
-          {isOwnedSession ? (
-            <button type="button" onClick={() => setEditNameOpen(true)} className="mt-3 text-sm text-[#c5ff4a] underline-offset-4 hover:underline">
-              Edit display name
-            </button>
-          ) : null}
-        </div>
-        <div className="flex flex-wrap items-center gap-2 pt-1">
-          {isOwnedSession && hydrated && !isAgentSetupComplete(profile.id) ? (
-            <Link href="/onboard" className={btnPrimary}>
-              Guided setup
-            </Link>
-          ) : null}
-          <StrategyModal agentId={profile.id} agentDisplayName={displayName} />
-        </div>
-      </div>
-
-      <section className="relative mt-12 overflow-hidden rounded-2xl border border-[#c5ff4a]/20 bg-[#050505] p-6 shadow-[0_0_0_1px_rgba(197,255,74,0.08),0_24px_80px_-20px_rgba(197,255,74,0.12)] sm:mt-14 sm:p-10">
+      <section className="relative mt-0 overflow-hidden rounded-2xl border border-[#c5ff4a]/20 bg-[#050505] p-6 shadow-[0_0_0_1px_rgba(197,255,74,0.08),0_24px_80px_-20px_rgba(197,255,74,0.12)] sm:p-10">
         <div
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_-20%,rgba(197,255,74,0.14),transparent_55%)]"
           aria-hidden
@@ -112,10 +95,9 @@ export function AgentDashboard({
         </div>
       </section>
 
-      <div className="mt-8 space-y-8">
-        <AgentBindBar currentId={profile.id} displayLabel={displayName} isOwnedSession={isOwnedSession} />
-        <ProofMockBlock proof={profile.proof} />
-        <AgentPanel profile={profile} />
+      <div className="mt-8">
+        <ProofMockBlock profile={profile} profileActions={profileActions} />
+        <AgentTradeHistory agentId={profile.id} verifiedScores={profile.serverMeta?.verified_scores} />
       </div>
     </>
   );

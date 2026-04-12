@@ -28,3 +28,13 @@ export function peekUserAgentId(): string | null {
     return null;
   }
 }
+
+/** Replace the stored browser agent id (e.g. after POST /agents/create). */
+export function setUserAgentId(id: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(USER_AGENT_ID_KEY, id.trim());
+  } catch {
+    /* ignore */
+  }
+}
